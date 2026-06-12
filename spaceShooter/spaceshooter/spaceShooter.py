@@ -20,14 +20,32 @@ import pygame
 import random
 from os import path
 
+import fuzzy_engine
+import fuzzy_ui
+
 ## assets folder
 img_dir = path.join(path.dirname(__file__), 'assets')
 sound_folder = path.join(path.dirname(__file__), 'sounds')
 
 ###############################
 ## to be placed in "constant.py" later
-WIDTH = 480
-HEIGHT = 600
+
+# ─── Layout ───
+#  +────────────────────────+──────────────────+
+#  │  TOP BAR (560 × 160)   │                  │
+#  +────────────────────────+  PLOTS (720×720) │
+#  │                        │  3×3 grid        │
+#  │  GAME AREA (560 × 560) │                  │
+#  │                        │                  │
+#  +────────────────────────+──────────────────+
+
+GAME_WIDTH = 560
+PLOT_WIDTH = 720
+TOP_HEIGHT = 160
+GAME_HEIGHT = 560
+WIDTH = GAME_WIDTH + PLOT_WIDTH  # 1280
+HEIGHT = TOP_HEIGHT + GAME_HEIGHT  # 720
+
 FPS = 60
 POWERUP_TIME = 5000
 BAR_LENGTH = 100
@@ -54,41 +72,90 @@ clock = pygame.time.Clock()     ## For syncing the FPS
 
 font_name = pygame.font.match_font('arial')
 
+
+# ─── Init Fuzzy Engine ───
+engine = fuzzy_engine.FuzzyDifficultyEngine()
+mf_data = engine.get_mf_data()
+
+# ─── Global state ───
+restart_count = 0
+game_paused = False
+manual_mode = False
+sidebar_btns = []
+
+dda_metrics = {
+    "total_mobs_spawned": 0,
+    "mobs_destroyed": 0,
+    "session_time_elapsed": 0,
+    "health": 100,
+    "lives": 5,
+    "gun_level": 1,
+    "restart_count": 0,
+    "current_speed_mult": 1.0,
+    "current_spawn_delay": 1.5,
+    "current_mob_size": 1.0,
+    "fired_rules": [],
+}
+
+
+# ═══════════════════════════════════════════════════════════════
+#  HELPERS
+# ═══════════════════════════════════════════════════════════════
+def run_fuzzy():
+    outputs = engine.evaluate(
+        dda_metrics["mobs_destroyed"],
+        dda_metrics["session_time_elapsed"],
+        dda_metrics["health"],
+        dda_metrics["lives"],
+        dda_metrics["gun_level"],
+        dda_metrics["restart_count"],
+    )
+    dda_metrics["current_speed_mult"] = outputs["speed_mult"]
+    dda_metrics["current_spawn_delay"] = outputs["spawn_delay"]
+    dda_metrics["current_mob_size"] = outputs["mob_size"]
+    dda_metrics["fired_rules"] = outputs["fired_rules"]
+
+
 def main_menu():
     global screen
-
-    menu_song = pygame.mixer.music.load(path.join(sound_folder, "menu.ogg"))
-    pygame.mixer.music.play(-1)
+    try:
+        pygame.mixer.music.load(path.join(sound_folder, "menu.ogg"))
+        pygame.mixer.music.play(-1)
+    except Exception:
+        pass
 
     title = pygame.image.load(path.join(img_dir, "main.png")).convert()
     title = pygame.transform.scale(title, (WIDTH, HEIGHT), screen)
-
-    screen.blit(title, (0,0))
+    screen.blit(title, (0, 0))
     pygame.display.update()
 
-    while True:
+    waiting = True
+    while waiting:
         ev = pygame.event.poll()
         if ev.type == pygame.KEYDOWN:
             if ev.key == pygame.K_RETURN:
-                break
+                waiting = False
             elif ev.key == pygame.K_q:
                 pygame.quit()
                 quit()
         elif ev.type == pygame.QUIT:
-                pygame.quit()
-                quit() 
+            pygame.quit()
+            quit()
         else:
-            draw_text(screen, "Press [ENTER] To Begin", 30, WIDTH/2, HEIGHT/2)
-            draw_text(screen, "or [Q] To Quit", 30, WIDTH/2, (HEIGHT/2)+40)
+            draw_text(screen, "Press [ENTER] To Begin", 30, WIDTH / 2, HEIGHT / 2)
+            draw_text(screen, "or [Q] To Quit", 30, WIDTH / 2, HEIGHT / 2 + 40)
             pygame.display.update()
 
     #pygame.mixer.music.stop()
-    ready = pygame.mixer.Sound(path.join(sound_folder,'getready.ogg'))
-    ready.play()
+    try:
+        ready = pygame.mixer.Sound(path.join(sound_folder, "getready.ogg"))
+        ready.play()
+    except Exception:
+        pass
     screen.fill(BLACK)
-    draw_text(screen, "GET READY!", 40, WIDTH/2, HEIGHT/2)
+    draw_text(screen, "GET READY!", 40, WIDTH / 2, HEIGHT / 2)
     pygame.display.update()
-    
+
 
 def draw_text(surf, text, size, x, y):
     ## selecting a cross platform font to display the score
@@ -120,12 +187,11 @@ def draw_lives(surf, x, y, lives, img):
         img_rect.y = y
         surf.blit(img, img_rect)
 
-
-
 def newmob():
     mob_element = Mob()
     all_sprites.add(mob_element)
     mobs.add(mob_element)
+    dda_metrics["total_mobs_spawned"] += 1
 
 class Explosion(pygame.sprite.Sprite):
     def __init__(self, center, size):
@@ -160,36 +226,36 @@ class Player(pygame.sprite.Sprite):
         self.image.set_colorkey(BLACK)
         self.rect = self.image.get_rect()
         self.radius = 20
-        self.rect.centerx = WIDTH / 2
-        self.rect.bottom = HEIGHT - 10
-        self.speedx = 0 
+        self.rect.centerx = GAME_WIDTH / 2
+        self.rect.bottom = TOP_HEIGHT + GAME_HEIGHT - 10
+        self.speedx = 0
         self.shield = 100
         self.shoot_delay = 250
         self.last_shot = pygame.time.get_ticks()
-        self.lives = 3
+        self.lives = 5
         self.hidden = False
         self.hide_timer = pygame.time.get_ticks()
         self.power = 1
-        self.power_timer = pygame.time.get_ticks()
+        self.power_time = pygame.time.get_ticks()
 
     def update(self):
         ## time out for powerups
-        if self.power >=2 and pygame.time.get_ticks() - self.power_time > POWERUP_TIME:
+        if self.power >= 2 and pygame.time.get_ticks() - self.power_time > POWERUP_TIME:
             self.power -= 1
             self.power_time = pygame.time.get_ticks()
 
         ## unhide 
         if self.hidden and pygame.time.get_ticks() - self.hide_timer > 1000:
             self.hidden = False
-            self.rect.centerx = WIDTH / 2
-            self.rect.bottom = HEIGHT - 30
+            self.rect.centerx = GAME_WIDTH / 2
+            self.rect.bottom = TOP_HEIGHT + GAME_HEIGHT - 30
 
         self.speedx = 0     ## makes the player static in the screen by default. 
         # then we have to check whether there is an event hanlding being done for the arrow keys being 
         ## pressed 
 
         ## will give back a list of the keys which happen to be pressed down at that moment
-        keystate = pygame.key.get_pressed()     
+        keystate = pygame.key.get_pressed()
         if keystate[pygame.K_LEFT]:
             self.speedx = -5
         elif keystate[pygame.K_RIGHT]:
@@ -200,8 +266,8 @@ class Player(pygame.sprite.Sprite):
             self.shoot()
 
         ## check for the borders at the left and right
-        if self.rect.right > WIDTH:
-            self.rect.right = WIDTH
+        if self.rect.right > GAME_WIDTH:
+            self.rect.right = GAME_WIDTH
         if self.rect.left < 0:
             self.rect.left = 0
 
@@ -247,20 +313,28 @@ class Player(pygame.sprite.Sprite):
     def hide(self):
         self.hidden = True
         self.hide_timer = pygame.time.get_ticks()
-        self.rect.center = (WIDTH / 2, HEIGHT + 200)
+        self.rect.center = (GAME_WIDTH / 2, HEIGHT + 200)
 
 
 # defines the enemies
 class Mob(pygame.sprite.Sprite):
     def __init__(self):
         pygame.sprite.Sprite.__init__(self)
-        self.image_orig = random.choice(meteor_images)
+        self.image_orig = random.choice(meteor_images).copy()
         self.image_orig.set_colorkey(BLACK)
+
+        # DDA mob_size scaling
+        size_scale = dda_metrics.get("current_mob_size", 1.0)
+        ow, oh = self.image_orig.get_size()
+        nw = max(8, int(ow * size_scale))
+        nh = max(8, int(oh * size_scale))
+        self.image_orig = pygame.transform.scale(self.image_orig, (nw, nh))
+
         self.image = self.image_orig.copy()
         self.rect = self.image.get_rect()
-        self.radius = int(self.rect.width *.90 / 2)
-        self.rect.x = random.randrange(0, WIDTH - self.rect.width)
-        self.rect.y = random.randrange(-150, -100)
+        self.radius = int(self.rect.width * 0.90 / 2)
+        self.rect.x = random.randrange(0, max(1, GAME_WIDTH - self.rect.width))
+        self.rect.y = random.randrange(TOP_HEIGHT - 150, TOP_HEIGHT - 40)
         self.speedy = random.randrange(5, 20)        ## for randomizing the speed of the Mob
 
         ## randomize the movements a little more 
@@ -270,12 +344,12 @@ class Mob(pygame.sprite.Sprite):
         self.rotation = 0
         self.rotation_speed = random.randrange(-8, 8)
         self.last_update = pygame.time.get_ticks()  ## time when the rotation has to happen
-        
+
     def rotate(self):
         time_now = pygame.time.get_ticks()
         if time_now - self.last_update > 50: # in milliseconds
             self.last_update = time_now
-            self.rotation = (self.rotation + self.rotation_speed) % 360 
+            self.rotation = (self.rotation + self.rotation_speed) % 360
             new_image = pygame.transform.rotate(self.image_orig, self.rotation)
             old_center = self.rect.center
             self.image = new_image
@@ -285,12 +359,17 @@ class Mob(pygame.sprite.Sprite):
     def update(self):
         self.rotate()
         self.rect.x += self.speedx
-        self.rect.y += self.speedy
-        ## now what if the mob element goes out of the screen
+        self.rect.y += self.speedy * dda_metrics["current_speed_mult"]
 
-        if (self.rect.top > HEIGHT + 10) or (self.rect.left < -25) or (self.rect.right > WIDTH + 20):
-            self.rect.x = random.randrange(0, WIDTH - self.rect.width)
-            self.rect.y = random.randrange(-100, -40)
+        ## now what if the mob element goes out of the screen
+        bottom_edge = TOP_HEIGHT + GAME_HEIGHT
+        if (
+            self.rect.top > bottom_edge + 10
+            or self.rect.left < -25
+            or self.rect.right > GAME_WIDTH + 20
+        ):
+            self.rect.x = random.randrange(0, max(1, GAME_WIDTH - self.rect.width))
+            self.rect.y = random.randrange(TOP_HEIGHT - 100, TOP_HEIGHT - 40)
             self.speedy = random.randrange(1, 8)        ## for randomizing the speed of the Mob
 
 ## defines the sprite for Powerups
@@ -309,10 +388,10 @@ class Pow(pygame.sprite.Sprite):
         """should spawn right in front of the player"""
         self.rect.y += self.speedy
         ## kill the sprite after it moves over the top border
-        if self.rect.top > HEIGHT:
+        if self.rect.top > TOP_HEIGHT + GAME_HEIGHT:
             self.kill()
 
-            
+
 
 ## defines the sprite for bullets
 class Bullet(pygame.sprite.Sprite):
@@ -330,7 +409,7 @@ class Bullet(pygame.sprite.Sprite):
         """should spawn right in front of the player"""
         self.rect.y += self.speedy
         ## kill the sprite after it moves over the top border
-        if self.rect.bottom < 0:
+        if self.rect.bottom < TOP_HEIGHT:
             self.kill()
 
         ## now we need a way to shoot
@@ -351,7 +430,7 @@ class Missile(pygame.sprite.Sprite):
     def update(self):
         """should spawn right in front of the player"""
         self.rect.y += self.speedy
-        if self.rect.bottom < 0:
+        if self.rect.bottom < TOP_HEIGHT:
             self.kill()
 
 
@@ -359,15 +438,20 @@ class Missile(pygame.sprite.Sprite):
 ## Load all game images
 
 background = pygame.image.load(path.join(img_dir, 'starfield.png')).convert()
-background_rect = background.get_rect()
+
+background = pygame.transform.scale(background, (GAME_WIDTH, GAME_HEIGHT))
+background_rect = background.get_rect(topleft=(0, TOP_HEIGHT))
 ## ^^ draw this rect first 
 
 player_img = pygame.image.load(path.join(img_dir, 'playerShip1_orange.png')).convert()
 player_mini_img = pygame.transform.scale(player_img, (25, 19))
 player_mini_img.set_colorkey(BLACK)
+
 bullet_img = pygame.image.load(path.join(img_dir, 'laserRed16.png')).convert()
 missile_img = pygame.image.load(path.join(img_dir, 'missile.png')).convert_alpha()
 # meteor_img = pygame.image.load(path.join(img_dir, 'meteorBrown_med1.png')).convert()
+
+meteor_images = []
 meteor_images = []
 meteor_list = [
     'meteorBrown_big1.png',
@@ -398,10 +482,10 @@ for i in range(9):
     explosion_anim['sm'].append(img_sm)
 
     ## player explosion
-    filename = 'sonicExplosion0{}.png'.format(i)
-    img = pygame.image.load(path.join(img_dir, filename)).convert()
-    img.set_colorkey(BLACK)
-    explosion_anim['player'].append(img)
+    filename2 = 'sonicExplosion0{}.png'.format(i)
+    img2 = pygame.image.load(path.join(img_dir, filename2)).convert()
+    img2.set_colorkey(BLACK)
+    explosion_anim['player'].append(img2)
 
 ## load power ups
 powerup_images = {}
@@ -435,6 +519,8 @@ player_die_sound = pygame.mixer.Sound(path.join(sound_folder, 'rumble1.ogg'))
 ## Game loop
 running = True
 menu_display = True
+death_explosion = None
+
 while running:
     if menu_display:
         main_menu()
@@ -443,11 +529,18 @@ while running:
         #Stop menu music
         pygame.mixer.music.stop()
         #Play the gameplay music
-        pygame.mixer.music.load(path.join(sound_folder, 'tgfcoder-FrozenJam-SeamlessLoop.ogg'))
-        pygame.mixer.music.play(-1)     ## makes the gameplay sound in an endless loop
-        
+        try:
+            pygame.mixer.music.load(
+                path.join(sound_folder, "tgfcoder-FrozenJam-SeamlessLoop.ogg")
+            )
+            pygame.mixer.music.play(-1)     ## makes the gameplay sound in an endless loop
+        except Exception:
+            pass
+
         menu_display = False
-        
+        game_paused = False
+        manual_mode = False
+
         ## group all the sprites together for ease of update
         all_sprites = pygame.sprite.Group()
         player = Player()
@@ -465,9 +558,25 @@ while running:
         bullets = pygame.sprite.Group()
         powerups = pygame.sprite.Group()
 
+
+        # Reset metrics
+        dda_metrics["total_mobs_spawned"] = 0
+        dda_metrics["mobs_destroyed"] = 0
+        dda_metrics["session_time_elapsed"] = 0
+        dda_metrics["health"] = player.shield
+        dda_metrics["lives"] = player.lives
+        dda_metrics["gun_level"] = player.power
+        dda_metrics["restart_count"] = restart_count
+        dda_metrics["current_speed_mult"] = 1.0
+        dda_metrics["current_spawn_delay"] = 1.5
+        dda_metrics["current_mob_size"] = 1.0
+        dda_metrics["fired_rules"] = []
+
+
         #### Score board variable
         score = 0
-        
+        death_explosion = None
+
     #1 Process input/events
     clock.tick(FPS)     ## will make the loop run at the same speed all the time
     for event in pygame.event.get():        # gets all the events which have occured till now and keeps tab of them.
@@ -484,77 +593,149 @@ while running:
         #     if event.key == pygame.K_SPACE:
         #         player.shoot()      ## we have to define the shoot()  function
 
+            elif event.key == pygame.K_TAB:
+                game_paused = not game_paused
+            elif event.key == pygame.K_m:
+                manual_mode = not manual_mode
+                if manual_mode:
+                    game_paused = True
+            elif event.key == pygame.K_p:
+                try:
+                    engine.plot_graphs()
+                except Exception as e:
+                    print(f"Plotting failed: {e}")
+
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and manual_mode:
+            mx, my = pygame.mouse.get_pos()
+            for r_minus, r_plus, key, lo, hi, step in sidebar_btns:
+                if r_minus.collidepoint(mx, my):
+                    dda_metrics[key] = max(lo, dda_metrics[key] - step)
+                elif r_plus.collidepoint(mx, my):
+                    dda_metrics[key] = min(hi, dda_metrics[key] + step)
+
     #2 Update
-    all_sprites.update()
+    if not game_paused:
+        dda_metrics["session_time_elapsed"] = pygame.time.get_ticks() // 1000
+        dda_metrics["health"] = player.shield
+        dda_metrics["lives"] = player.lives
+        dda_metrics["gun_level"] = player.power
+        dda_metrics["restart_count"] = restart_count
+
+        run_fuzzy()
+        all_sprites.update()
 
 
-    ## check if a bullet hit a mob
-    ## now we have a group of bullets and a group of mob
-    hits = pygame.sprite.groupcollide(mobs, bullets, True, True)
-    ## now as we delete the mob element when we hit one with a bullet, we need to respawn them again
-    ## as there will be no mob_elements left out 
-    for hit in hits:
-        score += 50 - hit.radius         ## give different scores for hitting big and small metoers
-        random.choice(expl_sounds).play()
-        # m = Mob()
-        # all_sprites.add(m)
-        # mobs.add(m)
-        expl = Explosion(hit.rect.center, 'lg')
-        all_sprites.add(expl)
-        if random.random() > 0.9:
-            pow = Pow(hit.rect.center)
-            all_sprites.add(pow)
-            powerups.add(pow)
-        newmob()        ## spawn a new mob
+        ## check if a bullet hit a mob
+        ## now we have a group of bullets and a group of mob
+        hits = pygame.sprite.groupcollide(mobs, bullets, True, True)
+        ## now as we delete the mob element when we hit one with a bullet, we need to respawn them again
+        ## as there will be no mob_elements left out 
+        for hit in hits:
+            score += 50 - hit.radius         ## give different scores for hitting big and small metoers
+            random.choice(expl_sounds).play()
+            # m = Mob()
+            # all_sprites.add(m)
+            # mobs.add(m)
+            dda_metrics["mobs_destroyed"] += 1
+            expl = Explosion(hit.rect.center, 'lg')
+            all_sprites.add(expl)
+            if random.random() > 0.9:
+                pow = Pow(hit.rect.center)
+                all_sprites.add(pow)
+                powerups.add(pow)
+            newmob()        ## spawn a new mob
 
-    ## ^^ the above loop will create the amount of mob objects which were killed spawn again
-    #########################
+        ## ^^ the above loop will create the amount of mob objects which were killed spawn again
+        #########################
 
-    ## check if the player collides with the mob
-    hits = pygame.sprite.spritecollide(player, mobs, True, pygame.sprite.collide_circle)        ## gives back a list, True makes the mob element disappear
-    for hit in hits:
-        player.shield -= hit.radius * 2
-        expl = Explosion(hit.rect.center, 'sm')
-        all_sprites.add(expl)
-        newmob()
-        if player.shield <= 0: 
-            player_die_sound.play()
-            death_explosion = Explosion(player.rect.center, 'player')
-            all_sprites.add(death_explosion)
-            # running = False     ## GAME OVER 3:D
-            player.hide()
-            player.lives -= 1
-            player.shield = 100
-
-    ## if the player hit a power up
-    hits = pygame.sprite.spritecollide(player, powerups, True)
-    for hit in hits:
-        if hit.type == 'shield':
-            player.shield += random.randrange(10, 30)
-            if player.shield >= 100:
+        ## check if the player collides with the mob
+        hits = pygame.sprite.spritecollide(player, mobs, True, pygame.sprite.collide_circle)        ## gives back a list, True makes the mob element disappear
+        for hit in hits:
+            player.shield -= hit.radius * 2
+            expl = Explosion(hit.rect.center, 'sm')
+            all_sprites.add(expl)
+            newmob()
+            if player.shield <= 0:
+                player_die_sound.play()
+                death_explosion = Explosion(player.rect.center, 'player')
+                all_sprites.add(death_explosion)
+                # running = False     ## GAME OVER 3:D
+                player.hide()
+                player.lives -= 1
                 player.shield = 100
-        if hit.type == 'gun':
-            player.powerup()
 
-    ## if player died and the explosion has finished, end game
-    if player.lives == 0 and not death_explosion.alive():
-        running = False
-        # menu_display = True
-        # pygame.display.update()
+        ## if the player hit a power up
+        hits = pygame.sprite.spritecollide(player, powerups, True)
+        for hit in hits:
+            if hit.type == 'shield':
+                player.shield += random.randrange(10, 30)
+                if player.shield >= 100:
+                    player.shield = 100
+            if hit.type == 'gun':
+                player.powerup()
+
+        ## if player died and the explosion has finished, end game
+        if player.lives == 0 and death_explosion and not death_explosion.alive():
+            # running = False
+            restart_count += 1
+            menu_display = True
+            # pygame.display.update()
+    else:
+        if manual_mode:
+            run_fuzzy()
 
     #3 Draw/render
     screen.fill(BLACK)
+
+    # Game area (clipped so sprites don't bleed into top bar or plots)
+    game_clip = pygame.Rect(0, TOP_HEIGHT, GAME_WIDTH, GAME_HEIGHT)
+    screen.set_clip(game_clip)
+
     ## draw the stargaze.png image
     screen.blit(background, background_rect)
 
     all_sprites.draw(screen)
-    draw_text(screen, str(score), 18, WIDTH / 2, 10)     ## 10px down from the screen
-    draw_shield_bar(screen, 5, 5, player.shield)
+
+    # HUD inside game area
+    draw_text(screen, str(score), 18, GAME_WIDTH / 2, TOP_HEIGHT + 10)
+    draw_shield_bar(screen, 5, TOP_HEIGHT + 5, player.shield)
 
     # Draw lives
-    draw_lives(screen, WIDTH - 100, 5, player.lives, player_mini_img)
+    draw_lives(screen, GAME_WIDTH - 150, TOP_HEIGHT + 5, player.lives, player_mini_img)
+
+    if game_paused:
+        pause_overlay = pygame.Surface((GAME_WIDTH, GAME_HEIGHT))
+        pause_overlay.set_alpha(120)
+        pause_overlay.fill(BLACK)
+        screen.blit(pause_overlay, (0, TOP_HEIGHT))
+        draw_text(
+            screen, "PAUSED", 36, GAME_WIDTH / 2, TOP_HEIGHT + GAME_HEIGHT // 2 - 20
+        )
+
+    screen.set_clip(None)
+
+    # Top bar
+    sidebar_btns = fuzzy_ui.draw_top_bar(
+        screen, dda_metrics, manual_mode, game_paused, GAME_WIDTH, TOP_HEIGHT, font_name
+    )
+
+    # Plot panel (right side, full height)
+    current_vals = {
+        "Mobs Killed": dda_metrics["mobs_destroyed"],
+        "Time Elapsed": dda_metrics["session_time_elapsed"],
+        "Health": dda_metrics["health"],
+        "Lives": dda_metrics["lives"],
+        "Gun Level": dda_metrics["gun_level"],
+        "Restarts": dda_metrics["restart_count"],
+        "Speed Mult": dda_metrics["current_speed_mult"],
+        "Spawn Delay": dda_metrics["current_spawn_delay"],
+        "Mob Size": dda_metrics["current_mob_size"],
+    }
+    fuzzy_ui.draw_plot_panel(
+        screen, mf_data, current_vals, GAME_WIDTH, PLOT_WIDTH, HEIGHT, font_name
+    )
 
     ## Done after drawing everything to the screen
-    pygame.display.flip()       
+    pygame.display.flip()
 
 pygame.quit()
