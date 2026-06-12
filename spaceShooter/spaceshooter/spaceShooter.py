@@ -521,6 +521,11 @@ running = True
 menu_display = True
 death_explosion = None
 
+active_input = None
+sidebar_btns = []
+input_rects = []
+input_text = ""
+
 while running:
     if menu_display:
         main_menu()
@@ -586,32 +591,77 @@ while running:
 
         ## Press ESC to exit game
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
-                running = False
-        # ## event for shooting the bullets
-        # elif event.type == pygame.KEYDOWN:
-        #     if event.key == pygame.K_SPACE:
-        #         player.shoot()      ## we have to define the shoot()  function
+            # -- NEW: Intercept typing if a text box is active --
+            if active_input is not None:
+                if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
+                    # Apply value and exit typing mode
+                    if input_text.strip() != "":
+                        try:
+                            # Cast to the original type (int or float)
+                            original_type = type(dda_metrics.get(active_input, 0))
+                            dda_metrics[active_input] = original_type(input_text)
+                        except ValueError:
+                            pass
+                    active_input = None
+                elif event.key == pygame.K_BACKSPACE:
+                    input_text = input_text[:-1] # Delete last char
+                elif event.key == pygame.K_ESCAPE:
+                    active_input = None # Cancel typing
+                else:
+                    # Append numbers or decimals
+                    if event.unicode.isnumeric() or event.unicode == ".":
+                        input_text += event.unicode
+            
+            # -- Existing Keybinds (Only run if NOT typing in a box) --
+            else:
+                if event.key == pygame.K_ESCAPE:
+                    running = False
+            # ## event for shooting the bullets
+            # elif event.type == pygame.KEYDOWN:
+            #     if event.key == pygame.K_SPACE:
+            #         player.shoot()      ## we have to define the shoot()  function
 
-            elif event.key == pygame.K_TAB:
-                game_paused = not game_paused
-            elif event.key == pygame.K_m:
-                manual_mode = not manual_mode
-                if manual_mode:
-                    game_paused = True
-            elif event.key == pygame.K_p:
-                try:
-                    engine.plot_graphs()
-                except Exception as e:
-                    print(f"Plotting failed: {e}")
+                elif event.key == pygame.K_TAB:
+                    game_paused = not game_paused
+                elif event.key == pygame.K_m:
+                    manual_mode = not manual_mode
+                    if manual_mode:
+                        game_paused = True
+                elif event.key == pygame.K_p:
+                    try:
+                        engine.plot_graphs()
+                    except Exception as e:
+                        print(f"Plotting failed: {e}")
 
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and manual_mode:
-            mx, my = pygame.mouse.get_pos()
-            for r_minus, r_plus, key, lo, hi, step in sidebar_btns:
-                if r_minus.collidepoint(mx, my):
-                    dda_metrics[key] = max(lo, dda_metrics[key] - step)
-                elif r_plus.collidepoint(mx, my):
-                    dda_metrics[key] = min(hi, dda_metrics[key] + step)
+        # -- UPDATED: Mouse Clicks --
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and manual_mode:
+            mx, my = event.pos
+            clicked_box = False
+
+            # 1. Check if an input box was clicked
+            for rect, key in input_rects:
+                if rect.collidepoint(mx, my):
+                    active_input = key
+                    input_text = str(dda_metrics.get(key, 0))
+                    clicked_box = True
+                    break
+            
+            if not clicked_box:
+                # 2. If clicked elsewhere, save any pending typing and deselect
+                if active_input is not None and input_text.strip() != "":
+                    try:
+                        original_type = type(dda_metrics.get(active_input, 0))
+                        dda_metrics[active_input] = original_type(input_text)
+                    except ValueError:
+                        pass
+                active_input = None
+
+                # 3. Check if +/- buttons were clicked
+                for r_minus, r_plus, key, lo, hi, step in sidebar_btns:
+                    if r_minus.collidepoint(mx, my):
+                        dda_metrics[key] = max(lo, dda_metrics[key] - step)
+                    elif r_plus.collidepoint(mx, my):
+                        dda_metrics[key] = min(hi, dda_metrics[key] + step)
 
     #2 Update
     if not game_paused:
@@ -714,9 +764,11 @@ while running:
 
     screen.set_clip(None)
 
-    # Top bar
-    sidebar_btns = fuzzy_ui.draw_top_bar(
-        screen, dda_metrics, manual_mode, game_paused, GAME_WIDTH, TOP_HEIGHT, font_name
+    # -- UPDATED: Top bar call --
+    # Unpack both returned lists, and pass the active_input and input_text
+    sidebar_btns, input_rects = fuzzy_ui.draw_top_bar(
+        screen, dda_metrics, manual_mode, game_paused, GAME_WIDTH, TOP_HEIGHT, font_name,
+        active_input, input_text
     )
 
     # Plot panel (right side, full height)

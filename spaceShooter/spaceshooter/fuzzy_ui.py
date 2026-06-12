@@ -27,7 +27,17 @@ MF_COLORS = [
 # ═══════════════════════════════════════════════════════════════
 
 
-def draw_top_bar(surf, metrics, manual_mode, game_paused, game_w, top_h, font_name):
+def draw_top_bar(
+    surf,
+    metrics,
+    manual_mode,
+    game_paused,
+    game_w,
+    top_h,
+    font_name,
+    active_input=None,
+    input_text="",
+):
     """Draw the horizontal control bar above the game area.
     Returns list of clickable button rects for manual mode."""
 
@@ -68,6 +78,7 @@ def draw_top_bar(surf, metrics, manual_mode, game_paused, game_w, top_h, font_na
     ]
 
     btn_rects = []
+    input_rects = []  # Track the clickable text boxes
     col_w = game_w // 3
 
     for idx, (label, key, lo, hi, step) in enumerate(input_fields):
@@ -77,10 +88,31 @@ def draw_top_bar(surf, metrics, manual_mode, game_paused, game_w, top_h, font_na
         cy = y + row * 24
 
         val = metrics.get(key, 0)
-        surf.blit(fb.render(f"{label}: {val}", True, WHITE), (cx, cy))
+
+        # Draw the Label
+        label_surf = fb.render(f"{label}: ", True, WHITE)
+        surf.blit(label_surf, (cx, cy))
+
+        # -- NEW: Draw the Text Input Box --
+        box_x = cx + label_surf.get_width()
+        box_w = 40
+        box_rect = pygame.Rect(box_x, cy - 2, box_w, 18)
+
+        # Highlight the box if the user is currently typing in it
+        is_active = active_input == key
+        box_color = (80, 80, 100) if is_active else (40, 40, 45)
+        pygame.draw.rect(surf, box_color, box_rect, border_radius=3)
+
+        # Determine what text to show (the typing buffer, or the actual value)
+        display_str = input_text if is_active else str(val)
+        text_color = YELLOW if is_active else WHITE
+        surf.blit(fb.render(display_str, True, text_color), (box_rect.x + 4, cy))
 
         if manual_mode:
-            bx = cx + col_w - 68
+            input_rects.append((box_rect, key))  # Save for click detection
+
+            # Shift the + and - buttons to the right of the text box
+            bx = box_rect.right + 10
             r_minus = pygame.Rect(bx, cy, 22, 17)
             pygame.draw.rect(surf, RED, r_minus, border_radius=2)
             _blit_centered(surf, fb, "-", WHITE, r_minus.centerx, r_minus.y - 1)
@@ -128,7 +160,7 @@ def draw_top_bar(surf, metrics, manual_mode, game_paused, game_w, top_h, font_na
         line = "Active: baseline (no dominant rules)"
     surf.blit(fs.render(line, True, YELLOW), (12, out_y))
 
-    return btn_rects
+    return btn_rects, input_rects
 
 
 # ═══════════════════════════════════════════════════════════════
