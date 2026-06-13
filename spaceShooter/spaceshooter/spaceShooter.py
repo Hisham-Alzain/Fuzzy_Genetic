@@ -583,6 +583,7 @@ while running:
         dda_metrics["current_spawn_delay"] = 1.5
         dda_metrics["current_mob_size"] = 1.0
         dda_metrics["fired_rules"] = []
+        session_start_time = pygame.time.get_ticks()
 
 
         #### Score board variable
@@ -672,7 +673,7 @@ while running:
 
     #2 Update
     if not game_paused:
-        dda_metrics["session_time_elapsed"] = pygame.time.get_ticks() // 1000
+        dda_metrics["session_time_elapsed"] = (pygame.time.get_ticks() - session_start_time) // 1000        
         dda_metrics["health"] = player.shield
         dda_metrics["lives"] = player.lives
         dda_metrics["gun_level"] = player.power
@@ -757,6 +758,8 @@ while running:
 
             # 2. Run the fuzzy engine to crunch the new manual inputs live
             run_fuzzy()
+            current_time_sec = float(dda_metrics.get("session_time_elapsed", 0))
+            session_start_time = pygame.time.get_ticks() - int(current_time_sec * 1000)
 
     #3 Draw/render
     screen.fill(BLACK)

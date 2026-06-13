@@ -267,6 +267,48 @@ class FuzzyDifficultyEngine:
         self.rules_info.append(
             (r15, "R15: IF kills=High AND lives=High AND restarts=Low THEN talent")
         )
+        
+        # ---- GROUP D: COMPLEX / HIGH-LEVEL RULES (16-20) ----
+
+        # R16: Glass Cannon (Player has massive firepower & kills, but low health)
+        # Give them fast enemies but smaller hitboxes to dodge, testing their aim.
+        r16 = ctrl.Rule(
+            self.gun_level["high"] & self.health["low"] & self.mobs_killed["high"],
+            (self.speed_mult["very_high"], self.spawn_delay["low"], self.mob_size["low"])
+        )
+        self.rules_info.append((r16, "R16: IF gun=High+kills=High+health=Low THEN fast glass cannon mode"))
+
+        # R17: The Comeback / Redemption (Player died a lot before, but is currently surviving well)
+        # We increase difficulty to match their current good run, but not to the absolute max so we don't unfairly ruin their comeback.
+        r17 = ctrl.Rule(
+            self.restart_count["high"] & self.mobs_killed["high"] & self.health["high"],
+            (self.speed_mult["high"], self.spawn_delay["low"], self.mob_size["medium"])
+        )
+        self.rules_info.append((r17, "R17: IF restarts=High+kills=High+health=High THEN redemption challenge"))
+
+        # R18: Tank but Ineffective (Player is surviving a long time, but not killing much)
+        # Force them to act by swarming them with massive, slow-moving targets.
+        r18 = ctrl.Rule(
+            self.health["very_high"] & self.lives["high"] & self.mobs_killed["low"] & (self.time_elapsed["medium"] | self.time_elapsed["high"]),
+            (self.speed_mult["low"], self.spawn_delay["very_low"], self.mob_size["very_high"])
+        )
+        self.rules_info.append((r18, "R18: IF time=Med+health=V.High+kills=Low THEN giant slow swarm"))
+
+        # R19: Maximum Overdrive / God Mode (Player is dominating absolutely everything)
+        # Absolute maximum difficulty. Fast, huge, and spawning constantly.
+        r19 = ctrl.Rule(
+            self.gun_level["high"] & self.health["very_high"] & self.lives["high"] & self.time_elapsed["very_high"] & self.mobs_killed["very_high"],
+            (self.speed_mult["very_high"], self.spawn_delay["very_low"], self.mob_size["very_high"])
+        )
+        self.rules_info.append((r19, "R19: IF ALL stats dominating THEN MAX OVERDRIVE"))
+
+        # R20: War of Attrition (Player survived a long time, but with weak weapons and few kills)
+        # Lots of normal-speed, small targets.
+        r20 = ctrl.Rule(
+            self.time_elapsed["high"] & self.gun_level["low"] & self.restart_count["low"],
+            (self.speed_mult["medium"], self.spawn_delay["low"], self.mob_size["low"])
+        )
+        self.rules_info.append((r20, "R20: IF time=High+gun=Low+restarts=Low THEN war of attrition"))
 
         # =====================================================
         # 4. COMPILE ENGINE
@@ -393,6 +435,11 @@ class FuzzyDifficultyEngine:
             min(gl["high"], hp["high"]),  # R13
             min(te["very_high"], hp["high"]),  # R14
             min(mk["high"], lv["high"], rc["low"]),  # R15
+            min(gl["high"], hp["low"], mk["high"]),  # R16
+            min(rc["high"], mk["high"], hp["high"]),  # R17
+            min(hp["very_high"], lv["high"], mk["low"], max(te["medium"], te["high"])),  # R18
+            min(gl["high"], hp["very_high"], lv["high"], te["very_high"], mk["very_high"]),  # R19
+            min(te["high"], gl["low"], rc["low"]),  # R20
         ]
 
         fired = []
