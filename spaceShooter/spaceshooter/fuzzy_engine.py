@@ -310,7 +310,7 @@ class FuzzyDifficultyEngine:
             }
 
     def get_mf_data(self):
-        """Return MF arrays for all 9 variables (for pygame plot rendering).
+        """Return membership function arrays for all 9 variables (for pygame plot rendering).
         Returns list of dicts in display order."""
         ordered = [
             ("Mobs Killed", self.mobs_killed, "input"),

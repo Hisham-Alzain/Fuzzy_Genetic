@@ -83,6 +83,13 @@ game_paused = False
 manual_mode = False
 sidebar_btns = []
 
+# throttle the AI:
+last_fuzzy_update = 0 
+FUZZY_UPDATE_RATE = 500 # Milliseconds between fuzzy calculations
+plot_surface = pygame.Surface((PLOT_WIDTH, HEIGHT))
+last_plot_update = 0
+PLOT_UPDATE_RATE = 500
+
 dda_metrics = {
     "total_mobs_spawned": 0,
     "mobs_destroyed": 0,
@@ -671,7 +678,11 @@ while running:
         dda_metrics["gun_level"] = player.power
         dda_metrics["restart_count"] = restart_count
 
-        run_fuzzy()
+        fuzz_now = pygame.time.get_ticks()
+        if fuzz_now - last_fuzzy_update > FUZZY_UPDATE_RATE:
+            run_fuzzy() # Run Fuzzy twice a second
+            last_fuzzy_update = fuzz_now
+
         all_sprites.update()
 
 
@@ -732,6 +743,19 @@ while running:
             # pygame.display.update()
     else:
         if manual_mode:
+            # 1. Sync manual UI overrides back into the actual Pygame entities
+            player.shield = float(dda_metrics["health"])
+            if player.shield <= 0:
+                player.shield = float(1)
+
+            player.lives = int(dda_metrics["lives"])
+
+            player.power = int(dda_metrics["gun_level"])
+            player.power_time = pygame.time.get_ticks()
+
+            restart_count = int(dda_metrics["restart_count"])
+
+            # 2. Run the fuzzy engine to crunch the new manual inputs live
             run_fuzzy()
 
     #3 Draw/render
@@ -783,9 +807,22 @@ while running:
         "Spawn Delay": dda_metrics["current_spawn_delay"],
         "Mob Size": dda_metrics["current_mob_size"],
     }
-    fuzzy_ui.draw_plot_panel(
-        screen, mf_data, current_vals, GAME_WIDTH, PLOT_WIDTH, HEIGHT, font_name
-    )
+
+    plot_now = pygame.time.get_ticks()
+    # If 500ms have passed OR we are changing values in manual mode.
+    if plot_now - last_plot_update > PLOT_UPDATE_RATE or manual_mode:
+        # 1. Clear our invisible cache canvas
+        plot_surface.fill(BLACK) 
+        
+        # 2. Draw the heavy plots onto the cache canvas.
+        fuzzy_ui.draw_plot_panel(
+            plot_surface, mf_data, current_vals, 0, PLOT_WIDTH, HEIGHT, font_name
+        )
+        last_plot_update = plot_now
+
+    # 3. "Stamp" the cached canvas onto the main screen exactly where it belongs
+    screen.blit(plot_surface, (GAME_WIDTH, 0))
+
 
     ## Done after drawing everything to the screen
     pygame.display.flip()
