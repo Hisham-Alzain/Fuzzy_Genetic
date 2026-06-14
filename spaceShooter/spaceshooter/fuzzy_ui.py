@@ -60,8 +60,8 @@ def draw_top_bar(
     pause_txt = "PAUSED" if game_paused else ""
     surf.blit(fb.render(pause_txt, True, ORANGE), (200, y + 1))
 
-    keys_txt = "[TAB] Pause  [M] Manual  [P] Plots  [ESC] Quit"
-    surf.blit(fs.render(keys_txt, True, MED_GRAY), (game_w - 310, y + 3))
+    keys_txt = "[TAB] Pause  [M] Manual  [P] Plots  [R] Rules  [ESC] Quit"
+    surf.blit(fs.render(keys_txt, True, MED_GRAY), (game_w - 380, y + 3))
 
     # ── Row 1-2: Crisp Inputs (2 rows × 3 columns) ──
     y = 28
@@ -318,6 +318,109 @@ def _draw_single_plot(
 
     # Y-axis "1.0" label
     surf.blit(fa.render("1.0", True, MED_GRAY), (dx - 2, dy - 10))
+
+
+# ═══════════════════════════════════════════════════════════════
+#  RULES PANEL  (Alternative right-side view)
+# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
+#  RULES PANEL  (Alternative right-side view)
+# ═══════════════════════════════════════════════════════════════
+
+
+def draw_rules_panel(
+    surf, rules_info, rule_dict, fired_rules, panel_x, panel_w, panel_h, font_name
+):
+    """Draw all fuzzy rules categorized by difficulty in a 2-column layout."""
+
+    # Background
+    panel_rect = pygame.Rect(panel_x, 0, panel_w, panel_h)
+    pygame.draw.rect(surf, DARK_GRAY, panel_rect)
+    pygame.draw.line(surf, LIGHT_GRAY, (panel_x, 0), (panel_x, panel_h), 2)
+
+    title_font = pygame.font.Font(font_name, 22)
+    cat_font = pygame.font.Font(font_name, 15)
+    name_font = pygame.font.Font(font_name, 13)
+    logic_font = pygame.font.Font(font_name, 11)
+    desc_font = pygame.font.Font(font_name, 11)
+
+    # Panel Title
+    surf.blit(title_font.render("FUZZY RULE BASE", True, YELLOW), (panel_x + 20, 15))
+
+    # Updated Slices: Exactly 6 rules per category
+    columns = [
+        # --- LEFT COLUMN ---
+        [
+            ("LOW DIFFICULTY (Mercy Rules)", rules_info[0:6], GREEN),
+            ("MEDIUM DIFFICULTY (Neutral Rules)", rules_info[6:12], CYAN),
+        ],
+        # --- RIGHT COLUMN ---
+        [
+            ("HIGH DIFFICULTY (Challenge Rules)", rules_info[12:18], ORANGE),
+            ("SPECIAL (Complex Scenarios)", rules_info[18:24], RED),
+        ],
+    ]
+
+    # Parse fired rules to get their tags
+    active_tags = []
+    for fr in fired_rules:
+        if ":" in fr:
+            active_tags.append(fr.split(":")[0].strip())
+
+    col_w = (panel_w - 60) // 2
+
+    # Draw Columns
+    for col_idx, col_data in enumerate(columns):
+        base_x = panel_x + 20 + (col_idx * (col_w + 20))
+        y_offset = 55
+
+        for cat_name, rules_list, color in col_data:
+            # Draw Category Header
+            surf.blit(cat_font.render(cat_name, True, color), (base_x, y_offset))
+            y_offset += 25
+
+            for _, original_rule_string in rules_list:
+                tag = original_rule_string.split(":")[0].strip()
+
+                logic_str = original_rule_string
+                if ":" in original_rule_string:
+                    logic_str = original_rule_string.split(":", 1)[1].strip()
+
+                ui_data = rule_dict.get(
+                    tag, {"name": "Unknown", "effect": "Effect missing"}
+                )
+                display_name = f"{tag}: {ui_data['name']}"
+                display_effect = ui_data["effect"]
+
+                is_active = tag in active_tags
+
+                if is_active:
+                    # UPDATED SPACING: Taller highlight box (46px instead of 42px)
+                    bg_rect = pygame.Rect(base_x - 5, y_offset - 2, col_w, 46)
+                    pygame.draw.rect(surf, (60, 60, 30), bg_rect, border_radius=4)
+                    text_color = YELLOW
+                    logic_color = LIGHT_GRAY
+                    desc_color = WHITE
+                else:
+                    text_color = LIGHT_GRAY
+                    logic_color = (120, 120, 130)
+                    desc_color = MED_GRAY
+
+                surf.blit(
+                    name_font.render(display_name, True, text_color), (base_x, y_offset)
+                )
+                surf.blit(
+                    logic_font.render(logic_str, True, logic_color),
+                    (base_x + 10, y_offset + 15),
+                )
+                surf.blit(
+                    desc_font.render(f"THEN {display_effect}", True, desc_color),
+                    (base_x + 10, y_offset + 28),
+                )
+
+                y_offset += 50
+
+            y_offset += 15
 
 
 # ═══════════════════════════════════════════════════════════════

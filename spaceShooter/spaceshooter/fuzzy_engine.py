@@ -114,16 +114,17 @@ class FuzzyDifficultyEngine:
         )
 
         # =====================================================
-        # 3. RULE BASE  (15 Rules in 3 Groups)
+        # 3. RULE BASE  (24 Rules in 4 Groups)
         # =====================================================
         #
         # Player struggling  -> ease off  (slow mobs, sparse spawns, small targets)
         # Player stable      -> hold      (medium everything)
         # Player dominating  -> ramp up   (fast mobs, dense spawns, big targets)
+        # Player special     -> New challenges (chaos, high damage, low dodge)
 
         self.rules_info = []  # Stores (rule_obj, description) pairs
 
-        # ---- GROUP A: MERCY RULES (1-5) ----
+        # ---- GROUP A: LOW / MERCY RULES (1-6) ----
 
         r1 = ctrl.Rule(
             self.lives["low"] & self.health["very_low"],
@@ -164,17 +165,32 @@ class FuzzyDifficultyEngine:
         )
         self.rules_info.append((r5, "R5:  IF health=V.Low THEN safety net"))
 
-        # ---- GROUP B: NEUTRAL RULES (6-10) ----
-
+        # NEW R6: Low DPS Struggle - Player survives but can't kill anything.
         r6 = ctrl.Rule(
+            self.gun_level["low"]
+            & self.mobs_killed["very_low"]
+            & (self.time_elapsed["medium"] | self.time_elapsed["high"]),
+            (
+                self.speed_mult["very_low"],
+                self.spawn_delay["high"],
+                self.mob_size["low"],
+            ),
+        )
+        self.rules_info.append(
+            (r6, "R6:  IF gun=Low AND kills=V.Low AND time=Med+ THEN low dps struggle")
+        )
+
+        # ---- GROUP B: MEDIUM / NEUTRAL RULES (7-12) ----
+
+        r7 = ctrl.Rule(
             self.time_elapsed["very_low"] & self.mobs_killed["very_low"],
             (self.speed_mult["low"], self.spawn_delay["high"], self.mob_size["low"]),
         )
         self.rules_info.append(
-            (r6, "R6:  IF time=V.Low AND kills=V.Low THEN gentle intro")
+            (r7, "R7:  IF time=V.Low AND kills=V.Low THEN gentle intro")
         )
 
-        r7 = ctrl.Rule(
+        r8 = ctrl.Rule(
             self.mobs_killed["medium"] & self.time_elapsed["medium"],
             (
                 self.speed_mult["medium"],
@@ -182,9 +198,9 @@ class FuzzyDifficultyEngine:
                 self.mob_size["medium"],
             ),
         )
-        self.rules_info.append((r7, "R7:  IF kills=Med AND time=Med THEN standard"))
+        self.rules_info.append((r8, "R8:  IF kills=Med AND time=Med THEN standard"))
 
-        r8 = ctrl.Rule(
+        r9 = ctrl.Rule(
             self.health["medium"] & self.lives["normal"],
             (
                 self.speed_mult["medium"],
@@ -193,10 +209,10 @@ class FuzzyDifficultyEngine:
             ),
         )
         self.rules_info.append(
-            (r8, "R8:  IF health=Med AND lives=Normal THEN baseline")
+            (r9, "R9:  IF health=Med AND lives=Normal THEN baseline")
         )
 
-        r9 = ctrl.Rule(
+        r10 = ctrl.Rule(
             self.gun_level["high"] & self.health["low"],
             (
                 self.speed_mult["medium"],
@@ -205,10 +221,10 @@ class FuzzyDifficultyEngine:
             ),
         )
         self.rules_info.append(
-            (r9, "R9:  IF gun=High AND health=Low THEN equipment compensates")
+            (r10, "R10:  IF gun=High AND health=Low THEN equipment compensates")
         )
 
-        r10 = ctrl.Rule(
+        r11 = ctrl.Rule(
             self.restart_count["normal"] & self.health["medium"],
             (
                 self.speed_mult["medium"],
@@ -217,20 +233,33 @@ class FuzzyDifficultyEngine:
             ),
         )
         self.rules_info.append(
-            (r10, "R10: IF restarts=Normal AND health=Med THEN stable")
+            (r11, "R11: IF restarts=Normal AND health=Med THEN stable")
         )
 
-        # ---- GROUP C: CHALLENGE RULES (11-15) ----
+        # NEW R12: Stable Start - Prevent sudden spikes in early game if player is just doing okay.
+        r12 = ctrl.Rule(
+            self.time_elapsed["low"] & self.mobs_killed["medium"] & self.health["high"],
+            (
+                self.speed_mult["medium"],
+                self.spawn_delay["medium"],
+                self.mob_size["medium"],
+            ),
+        )
+        self.rules_info.append(
+            (r12, "R12: IF time=Low AND kills=Med AND health=High THEN stable start")
+        )
 
-        r11 = ctrl.Rule(
+        # ---- GROUP C: HIGH / CHALLENGE RULES (13-18) ----
+
+        r13 = ctrl.Rule(
             self.mobs_killed["high"] & self.time_elapsed["high"],
             (self.speed_mult["high"], self.spawn_delay["low"], self.mob_size["high"]),
         )
         self.rules_info.append(
-            (r11, "R11: IF kills=High AND time=High THEN challenge ramp")
+            (r13, "R13: IF kills=High AND time=High THEN challenge ramp")
         )
 
-        r12 = ctrl.Rule(
+        r14 = ctrl.Rule(
             self.mobs_killed["very_high"]
             & self.health["very_high"]
             & self.lives["high"],
@@ -241,74 +270,136 @@ class FuzzyDifficultyEngine:
             ),
         )
         self.rules_info.append(
-            (r12, "R12: IF kills=V.High AND health=V.High AND lives=High THEN max")
+            (r14, "R14: IF kills=V.High AND health=V.High AND lives=High THEN max")
         )
 
-        r13 = ctrl.Rule(
+        r15 = ctrl.Rule(
             self.gun_level["high"] & self.health["high"],
             (self.speed_mult["high"], self.spawn_delay["low"], self.mob_size["high"]),
         )
         self.rules_info.append(
-            (r13, "R13: IF gun=High AND health=High THEN weapon escalation")
+            (r15, "R15: IF gun=High AND health=High THEN weapon escalation")
         )
 
-        r14 = ctrl.Rule(
+        r16 = ctrl.Rule(
             self.time_elapsed["very_high"] & self.health["high"],
             (self.speed_mult["high"], self.spawn_delay["low"], self.mob_size["high"]),
         )
         self.rules_info.append(
-            (r14, "R14: IF time=V.High AND health=High THEN endurance push")
+            (r16, "R16: IF time=V.High AND health=High THEN endurance push")
         )
 
-        r15 = ctrl.Rule(
+        r17 = ctrl.Rule(
             self.mobs_killed["high"] & self.lives["high"] & self.restart_count["low"],
             (self.speed_mult["high"], self.spawn_delay["low"], self.mob_size["high"]),
         )
         self.rules_info.append(
-            (r15, "R15: IF kills=High AND lives=High AND restarts=Low THEN talent")
+            (r17, "R17: IF kills=High AND lives=High AND restarts=Low THEN talent")
         )
-        
-        # ---- GROUP D: COMPLEX / HIGH-LEVEL RULES (16-20) ----
+
+        # NEW R18: Early Dominance - Patches the gap you found!
+        r18 = ctrl.Rule(
+            self.gun_level["high"]
+            & self.mobs_killed["high"]
+            & self.time_elapsed["low"],
+            (self.speed_mult["high"], self.spawn_delay["low"], self.mob_size["high"]),
+        )
+        self.rules_info.append(
+            (r18, "R18: IF gun=High AND kills=High AND time=Low THEN early dominance")
+        )
+
+        # ---- GROUP D: SPECIAL / COMPLEX RULES (19-24) ----
 
         # R16: Glass Cannon (Player has massive firepower & kills, but low health)
         # Give them fast enemies but smaller hitboxes to dodge, testing their aim.
-        r16 = ctrl.Rule(
+        r19 = ctrl.Rule(
             self.gun_level["high"] & self.health["low"] & self.mobs_killed["high"],
-            (self.speed_mult["very_high"], self.spawn_delay["low"], self.mob_size["low"])
+            (
+                self.speed_mult["very_high"],
+                self.spawn_delay["low"],
+                self.mob_size["low"],
+            ),
         )
-        self.rules_info.append((r16, "R16: IF gun=High+kills=High+health=Low THEN fast glass cannon mode"))
+        self.rules_info.append(
+            (r19, "R19: IF gun=High+kills=High+health=Low THEN fast glass cannon mode")
+        )
 
         # R17: The Comeback / Redemption (Player died a lot before, but is currently surviving well)
         # We increase difficulty to match their current good run, but not to the absolute max so we don't unfairly ruin their comeback.
-        r17 = ctrl.Rule(
+        r20 = ctrl.Rule(
             self.restart_count["high"] & self.mobs_killed["high"] & self.health["high"],
-            (self.speed_mult["high"], self.spawn_delay["low"], self.mob_size["medium"])
+            (self.speed_mult["high"], self.spawn_delay["low"], self.mob_size["medium"]),
         )
-        self.rules_info.append((r17, "R17: IF restarts=High+kills=High+health=High THEN redemption challenge"))
+        self.rules_info.append(
+            (
+                r20,
+                "R20: IF restarts=High+kills=High+health=High THEN redemption challenge",
+            )
+        )
 
         # R18: Tank but Ineffective (Player is surviving a long time, but not killing much)
         # Force them to act by swarming them with massive, slow-moving targets.
-        r18 = ctrl.Rule(
-            self.health["very_high"] & self.lives["high"] & self.mobs_killed["low"] & (self.time_elapsed["medium"] | self.time_elapsed["high"]),
-            (self.speed_mult["low"], self.spawn_delay["very_low"], self.mob_size["very_high"])
+        r21 = ctrl.Rule(
+            self.health["very_high"]
+            & self.lives["high"]
+            & self.mobs_killed["low"]
+            & (self.time_elapsed["medium"] | self.time_elapsed["high"]),
+            (
+                self.speed_mult["low"],
+                self.spawn_delay["very_low"],
+                self.mob_size["very_high"],
+            ),
         )
-        self.rules_info.append((r18, "R18: IF time=Med+health=V.High+kills=Low THEN giant slow swarm"))
+        self.rules_info.append(
+            (r21, "R21: IF time=Med+health=V.High+kills=Low THEN giant slow swarm")
+        )
 
         # R19: Maximum Overdrive / God Mode (Player is dominating absolutely everything)
         # Absolute maximum difficulty. Fast, huge, and spawning constantly.
-        r19 = ctrl.Rule(
-            self.gun_level["high"] & self.health["very_high"] & self.lives["high"] & self.time_elapsed["very_high"] & self.mobs_killed["very_high"],
-            (self.speed_mult["very_high"], self.spawn_delay["very_low"], self.mob_size["very_high"])
+        r22 = ctrl.Rule(
+            self.gun_level["high"]
+            & self.health["very_high"]
+            & self.lives["high"]
+            & self.time_elapsed["very_high"]
+            & self.mobs_killed["very_high"],
+            (
+                self.speed_mult["very_high"],
+                self.spawn_delay["very_low"],
+                self.mob_size["very_high"],
+            ),
         )
-        self.rules_info.append((r19, "R19: IF ALL stats dominating THEN MAX OVERDRIVE"))
+        self.rules_info.append((r22, "R22: IF ALL stats dominating THEN MAX OVERDRIVE"))
 
         # R20: War of Attrition (Player survived a long time, but with weak weapons and few kills)
         # Lots of normal-speed, small targets.
-        r20 = ctrl.Rule(
-            self.time_elapsed["high"] & self.gun_level["low"] & self.restart_count["low"],
-            (self.speed_mult["medium"], self.spawn_delay["low"], self.mob_size["low"])
+        r23 = ctrl.Rule(
+            self.time_elapsed["high"]
+            & self.gun_level["low"]
+            & self.restart_count["low"],
+            (self.speed_mult["medium"], self.spawn_delay["low"], self.mob_size["low"]),
         )
-        self.rules_info.append((r20, "R20: IF time=High+gun=Low+restarts=Low THEN war of attrition"))
+        self.rules_info.append(
+            (r23, "R23: IF time=High+gun=Low+restarts=Low THEN war of attrition")
+        )
+
+        # NEW R24: The Last Stand - Final life, huge weapons, lots of kills, but surviving a long time. Pure chaos.
+        r24 = ctrl.Rule(
+            self.lives["low"]
+            & self.gun_level["high"]
+            & self.mobs_killed["high"]
+            & self.time_elapsed["high"],
+            (
+                self.speed_mult["very_high"],
+                self.spawn_delay["very_low"],
+                self.mob_size["high"],
+            ),
+        )
+        self.rules_info.append(
+            (
+                r24,
+                "R24: IF lives=Low AND gun=High AND kills=High AND time=High THEN the last stand",
+            )
+        )
 
         # =====================================================
         # 4. COMPILE ENGINE
@@ -316,6 +407,112 @@ class FuzzyDifficultyEngine:
         all_rules = [info[0] for info in self.rules_info]
         self.dda_control = ctrl.ControlSystem(all_rules)
         self.simulator = ctrl.ControlSystemSimulation(self.dda_control)
+
+        # =====================================================
+        # 5. UI DISPLAY DICTIONARY (24 Rules)
+        # =====================================================
+        self.rule_descriptions = {
+            # --- GROUP A: LOW / MERCY RULES ---
+            "R1": {
+                "name": "Critical Mercy",
+                "effect": "speed_mult=very_low, spawn_delay=very_high, mob_size=very_low",
+            },
+            "R2": {
+                "name": "Fatigue Pullback",
+                "effect": "speed_mult=low, spawn_delay=high, mob_size=low",
+            },
+            "R3": {
+                "name": "Persistent Mercy",
+                "effect": "speed_mult=low, spawn_delay=high, mob_size=low",
+            },
+            "R4": {
+                "name": "Early Struggle",
+                "effect": "speed_mult=low, spawn_delay=high, mob_size=low",
+            },
+            "R5": {
+                "name": "Safety Net",
+                "effect": "speed_mult=low, spawn_delay=high, mob_size=low",
+            },
+            "R6": {
+                "name": "Low DPS Struggle",
+                "effect": "speed_mult=very_low, spawn_delay=high, mob_size=low",
+            },
+            # --- GROUP B: MEDIUM / NEUTRAL RULES ---
+            "R7": {
+                "name": "Gentle Intro",
+                "effect": "speed_mult=low, spawn_delay=high, mob_size=low",
+            },
+            "R8": {
+                "name": "Standard Pace",
+                "effect": "speed_mult=medium, spawn_delay=medium, mob_size=medium",
+            },
+            "R9": {
+                "name": "Balanced State",
+                "effect": "speed_mult=medium, spawn_delay=medium, mob_size=medium",
+            },
+            "R10": {
+                "name": "Equipment Comp.",
+                "effect": "speed_mult=medium, spawn_delay=medium, mob_size=medium",
+            },
+            "R11": {
+                "name": "Stabilized Run",
+                "effect": "speed_mult=medium, spawn_delay=medium, mob_size=medium",
+            },
+            "R12": {
+                "name": "Stable Start",
+                "effect": "speed_mult=medium, spawn_delay=medium, mob_size=medium",
+            },
+            # --- GROUP C: HIGH / CHALLENGE RULES ---
+            "R13": {
+                "name": "Challenge Ramp",
+                "effect": "speed_mult=high, spawn_delay=low, mob_size=high",
+            },
+            "R14": {
+                "name": "Peak Performance",
+                "effect": "speed_mult=very_high, spawn_delay=very_low, mob_size=very_high",
+            },
+            "R15": {
+                "name": "Weapon Escalation",
+                "effect": "speed_mult=high, spawn_delay=low, mob_size=high",
+            },
+            "R16": {
+                "name": "Endurance Push",
+                "effect": "speed_mult=high, spawn_delay=low, mob_size=high",
+            },
+            "R17": {
+                "name": "Talent Recognition",
+                "effect": "speed_mult=high, spawn_delay=low, mob_size=high",
+            },
+            "R18": {
+                "name": "Early Dominance",
+                "effect": "speed_mult=high, spawn_delay=low, mob_size=high",
+            },
+            # --- GROUP D: SPECIAL / COMPLEX RULES ---
+            "R19": {
+                "name": "Glass Cannon",
+                "effect": "speed_mult=very_high, spawn_delay=low, mob_size=low",
+            },
+            "R20": {
+                "name": "The Comeback",
+                "effect": "speed_mult=high, spawn_delay=low, mob_size=medium",
+            },
+            "R21": {
+                "name": "Tank Swarm",
+                "effect": "speed_mult=low, spawn_delay=very_low, mob_size=very_high",
+            },
+            "R22": {
+                "name": "MAX OVERDRIVE",
+                "effect": "speed_mult=very_high, spawn_delay=very_low, mob_size=very_high",
+            },
+            "R23": {
+                "name": "War of Attrition",
+                "effect": "speed_mult=medium, spawn_delay=low, mob_size=low",
+            },
+            "R24": {
+                "name": "The Last Stand",
+                "effect": "speed_mult=very_high, spawn_delay=very_low, mob_size=high",
+            },
+        }
 
     # ----------------------------------------------------------
     # PUBLIC API
@@ -419,27 +616,44 @@ class FuzzyDifficultyEngine:
         }
 
         # Firing strength per rule (AND = min, OR = max)
+        # Firing strength per rule (AND = min, OR = max)
         strengths = [
+            # --- GROUP A ---
             min(lv["low"], hp["very_low"]),  # R1
             min(max(te["high"], te["very_high"]), hp["low"]),  # R2
             rc["high"],  # R3
             min(te["very_low"], hp["very_low"]),  # R4
             hp["very_low"],  # R5
-            min(te["very_low"], mk["very_low"]),  # R6
-            min(mk["medium"], te["medium"]),  # R7
-            min(hp["medium"], lv["normal"]),  # R8
-            min(gl["high"], hp["low"]),  # R9
-            min(rc["normal"], hp["medium"]),  # R10
-            min(mk["high"], te["high"]),  # R11
-            min(mk["very_high"], hp["very_high"], lv["high"]),  # R12
-            min(gl["high"], hp["high"]),  # R13
-            min(te["very_high"], hp["high"]),  # R14
-            min(mk["high"], lv["high"], rc["low"]),  # R15
-            min(gl["high"], hp["low"], mk["high"]),  # R16
-            min(rc["high"], mk["high"], hp["high"]),  # R17
-            min(hp["very_high"], lv["high"], mk["low"], max(te["medium"], te["high"])),  # R18
-            min(gl["high"], hp["very_high"], lv["high"], te["very_high"], mk["very_high"]),  # R19
-            min(te["high"], gl["low"], rc["low"]),  # R20
+            min(gl["low"], mk["very_low"], max(te["medium"], te["high"])),  # R6
+            # --- GROUP B ---
+            min(te["very_low"], mk["very_low"]),  # R7
+            min(mk["medium"], te["medium"]),  # R8
+            min(hp["medium"], lv["normal"]),  # R9
+            min(gl["high"], hp["low"]),  # R10
+            min(rc["normal"], hp["medium"]),  # R11
+            min(te["low"], mk["medium"], hp["high"]),  # R12
+            # --- GROUP C ---
+            min(mk["high"], te["high"]),  # R13
+            min(mk["very_high"], hp["very_high"], lv["high"]),  # R14
+            min(gl["high"], hp["high"]),  # R15
+            min(te["very_high"], hp["high"]),  # R16
+            min(mk["high"], lv["high"], rc["low"]),  # R17
+            min(gl["high"], mk["high"], te["low"]),  # R18
+            # --- GROUP D ---
+            min(gl["high"], hp["low"], mk["high"]),  # R19
+            min(rc["high"], mk["high"], hp["high"]),  # R20
+            min(
+                hp["very_high"], lv["high"], mk["low"], max(te["medium"], te["high"])
+            ),  # R21
+            min(
+                gl["high"],
+                hp["very_high"],
+                lv["high"],
+                te["very_high"],
+                mk["very_high"],
+            ),  # R22
+            min(te["high"], gl["low"], rc["low"]),  # R23
+            min(lv["low"], gl["high"], mk["high"], te["high"]),  # R24
         ]
 
         fired = []
