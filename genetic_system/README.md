@@ -2,8 +2,8 @@
 
 A genetic algorithm that splits 100 delivery stops between 5 couriers and
 orders each route, minimizing the makespan (the slowest courier's route), with
-a Primer-style pygame "race mode" visualization: every k generations the top 5
-children race their couriers live — finish order on screen = fitness order.
+a pygame-first "race mode" visualization: every k generations the top 5
+children race their couriers live, so finish order on screen matches fitness.
 
 ## Install
 
@@ -15,8 +15,14 @@ children race their couriers live — finish order on screen = fitness order.
 
     python main.py                          # default: 100 stops, 5 couriers, race UI
     python main.py --sanity                 # hand-made obvious-answer validation map
-    python main.py --headless --gens 1500   # no UI: log + fitness.png + best_routes.png + baselines
     python main.py --pop 400 --mut 0.3 --seed 7 --race-every 150 --credit off
+
+## UI Assets
+
+The GUI now uses pre-rendered PNG assets stored in `delivery_ga/assets/ui`.
+If you want to refresh or redesign the art set, regenerate them with:
+
+    python tools/generate_ui_assets.py
 
 Keys in the UI: SPACE pause · B toggle best-routes overlay · S screenshot · Q quit.
 
@@ -32,8 +38,7 @@ Keys in the UI: SPACE pause · B toggle best-routes overlay · S screenshot · Q
 | --race-every / --top | 100 / 5 | race frequency, children per race |
 | --credit on/off | on | crossover-credit breeder elitism (see below) |
 | --sanity | — | 5 tight clusters, obvious answer: 1 courier per cluster |
-| --headless | — | print-only run + matplotlib plots + baseline comparison |
-| --seed / --out | 0 / . | reproducibility, output directory |
+| --seed / --out | 0 / . | reproducibility, screenshot output directory |
 
 ## Design (maps to the assignment requirements)
 
@@ -58,17 +63,22 @@ Keys in the UI: SPACE pause · B toggle best-routes overlay · S screenshot · Q
    regardless of their own fitness — selecting on combining ability
    (progeny-testing analogue) to counter gene linkage. Toggle: `--credit`.
 6. **UI**: pygame race mode (color family = child, shade = courier, a child
-   finishes when its slowest truck returns), live makespan/bars/fitness
-   sparkline, end-of-run matplotlib fitness curve.
-7. **Validation**: `--sanity` map is solved exactly (one courier per cluster,
-   makespan ≈ theoretical optimum); GA beats both baselines in `baselines.py`
-   (random and greedy nearest-centroid + nearest-neighbour). Reference run,
-   seed 42, 1500 gens: random 10,883 / greedy 1,906 / **GA 1,697**.
+   finishes when its slowest truck returns), live makespan, per-courier bars,
+   fitness sparkline, and in-app setup sliders.
+7. **Validation**: `--sanity` map is still available for a quick visual check
+   that the GA converges toward the obvious cluster-per-courier solution.
 
 ## Files
 
-    map.py        map generators + decode/measure + toy verification (run it: `python map.py`)
-    ga.py         GA core: operators, loop, elitism, crossover-credit
-    baselines.py  random + greedy baselines
-    viz.py        pygame race-mode UI
-    main.py       argparse entry point
+    delivery_ga/domain/maps.py       map generators
+    delivery_ga/domain/routing.py    decode + distance / fitness helpers
+    delivery_ga/engine/ga.py         GA loop and elitism
+    delivery_ga/engine/operators.py  crossover + mutation operators
+    delivery_ga/ui/app.py            pygame application
+    delivery_ga/ui/race.py           race animation helpers
+    delivery_ga/ui/widgets.py        buttons and sliders
+    delivery_ga/ui/sprites.py        asset-backed sprite loaders
+    delivery_ga/assets/ui/           generated PNG UI assets
+    delivery_ga/cli.py               app launcher
+    tools/generate_ui_assets.py      asset generator for the UI set
+    main.py                          thin entry point
