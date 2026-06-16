@@ -167,18 +167,21 @@ class App:
         self._fit_world()
 
     def _fit_world(self):
-        """Fit the view to the actual depot+stops bounds with a single uniform
-        scale. This enlarges the content to fill the map (no wasted empty grid)
-        while preserving aspect ratio, so on-screen geometry stays true and the
-        reported world distances (makespan, route lengths) are unchanged."""
+        """Stretch the depot+stops bounds to fill the whole map rectangle, scaling
+        X and Y independently. This spreads the points across the entire view (no
+        wasted empty margins); it intentionally does not preserve aspect ratio. The
+        GA's reported distances (makespan, route lengths) are computed in world
+        units and are unaffected by this display transform."""
         view = self.layout["map_view"]
         pts = np.vstack([self.ga.stops, self.ga.depot])
         lo = pts.min(axis=0)
         span = np.maximum(pts.max(axis=0) - lo, 1.0)
-        scale = min(view.w * 0.92 / span[0], view.h * 0.92 / span[1])
-        offset_x = view.x + (view.w - span[0] * scale) / 2 - lo[0] * scale
-        offset_y = view.y + (view.h - span[1] * scale) / 2 - lo[1] * scale
-        self._sc = lambda p: (offset_x + p[0] * scale, offset_y + p[1] * scale)
+        pad = 0.06  # fraction of the view kept as breathing room on each edge
+        sx = view.w * (1 - 2 * pad) / span[0]
+        sy = view.h * (1 - 2 * pad) / span[1]
+        ox = view.x + view.w * pad - lo[0] * sx
+        oy = view.y + view.h * pad - lo[1] * sy
+        self._sc = lambda p: (ox + p[0] * sx, oy + p[1] * sy)
 
     # ----- primitives -------------------------------------------------------
     def get_car_sprite(self, sprite_name, direction):
