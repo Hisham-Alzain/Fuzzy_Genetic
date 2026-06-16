@@ -7,6 +7,24 @@ import time
 import numpy as np
 import pygame
 
+
+def _enable_dpi_awareness():
+    """Tell Windows we render our own pixels.
+
+    Without this, a scaled display (125%/150%) makes Windows bitmap-stretch the
+    pygame window after the fact, which leaves all small text jagged/blurry. With
+    it, pygame draws at the real physical resolution and stays razor-sharp.
+    """
+    try:
+        import ctypes
+
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)  # per-monitor aware
+        except Exception:
+            ctypes.windll.user32.SetProcessDPIAware()       # system aware (older Windows)
+    except Exception:
+        pass  # non-Windows or no ctypes — nothing to do
+
 from delivery_ga.domain.maps import clustered_map
 from delivery_ga.domain.routing import decode
 from delivery_ga.engine.ga import GA
@@ -44,6 +62,7 @@ class App:
         self.race_every = race_every
         self.top_n = top_n
         self.out_dir = out_dir
+        _enable_dpi_awareness()  # must run before the window is created
         pygame.init()
         # Render at the display's native resolution whenever the responsive layout
         # fits, so text and sprites stay razor-sharp (no per-frame downscale blur).
@@ -66,10 +85,10 @@ class App:
         self.clock = pygame.time.Clock()
 
         face = "segoeui,arial"
-        self.f_cap = pygame.font.SysFont(face, 12)              # ALL-CAPS labels
-        self.f_label = pygame.font.SysFont(face, 14)            # muted labels
-        self.f_body = pygame.font.SysFont(face, 15)             # body
-        self.f_card = pygame.font.SysFont(face, 18, bold=True)  # card titles
+        self.f_cap = pygame.font.SysFont(face, 13)              # ALL-CAPS labels
+        self.f_label = pygame.font.SysFont(face, 15)            # muted labels
+        self.f_body = pygame.font.SysFont(face, 16)             # body
+        self.f_card = pygame.font.SysFont(face, 19, bold=True)  # card titles
         self.f_stat = pygame.font.SysFont(face, 27, bold=True)  # stat numbers
         self.f_title = pygame.font.SysFont(face, 30, bold=True)  # page / modal title
         self._text_cache = {}  # (text, font_id, color) -> rendered surface
