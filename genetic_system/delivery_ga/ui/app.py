@@ -85,12 +85,12 @@ class App:
         self.clock = pygame.time.Clock()
 
         face = "segoeui,arial"
-        self.f_cap = pygame.font.SysFont(face, 13)              # ALL-CAPS labels
-        self.f_label = pygame.font.SysFont(face, 15)            # muted labels
-        self.f_body = pygame.font.SysFont(face, 16)             # body
-        self.f_card = pygame.font.SysFont(face, 19, bold=True)  # card titles
-        self.f_stat = pygame.font.SysFont(face, 27, bold=True)  # stat numbers
-        self.f_title = pygame.font.SysFont(face, 30, bold=True)  # page / modal title
+        self.f_cap = pygame.font.SysFont(face, 15)              # ALL-CAPS labels
+        self.f_label = pygame.font.SysFont(face, 17)            # muted labels
+        self.f_body = pygame.font.SysFont(face, 18)             # body
+        self.f_card = pygame.font.SysFont(face, 21, bold=True)  # card titles
+        self.f_stat = pygame.font.SysFont(face, 30, bold=True)  # stat numbers
+        self.f_title = pygame.font.SysFont(face, 34, bold=True)  # page / modal title
         self._text_cache = {}  # (text, font_id, color) -> rendered surface
 
         self.state = "SETUP"
@@ -168,10 +168,20 @@ class App:
         self.speed_slider.set_rect(controls.x + PAD, controls.y + 142, cw, 8)
         self.btn_stop.set_rect(controls.x + PAD, controls.bottom - PAD - 44, cw, 44)
 
-        map_view = self.layout["map_view"]
-        scale = min(map_view.w, map_view.h) / 1000.0
-        offset_x = map_view.x + (map_view.w - 1000 * scale) / 2
-        offset_y = map_view.y + (map_view.h - 1000 * scale) / 2
+        self._fit_world()
+
+    def _fit_world(self):
+        """Fit the view to the actual depot+stops bounds with a single uniform
+        scale. This enlarges the content to fill the map (no wasted empty grid)
+        while preserving aspect ratio, so on-screen geometry stays true and the
+        reported world distances (makespan, route lengths) are unchanged."""
+        view = self.layout["map_view"]
+        pts = np.vstack([self.ga.stops, self.ga.depot])
+        lo = pts.min(axis=0)
+        span = np.maximum(pts.max(axis=0) - lo, 1.0)
+        scale = min(view.w * 0.92 / span[0], view.h * 0.92 / span[1])
+        offset_x = view.x + (view.w - span[0] * scale) / 2 - lo[0] * scale
+        offset_y = view.y + (view.h - span[1] * scale) / 2 - lo[1] * scale
         self._sc = lambda p: (offset_x + p[0] * scale, offset_y + p[1] * scale)
 
     # ----- primitives -------------------------------------------------------
@@ -435,6 +445,7 @@ class App:
         mut_val = self.setup_sliders[4].val
         depot, stops = clustered_map(stops_val, max(1, stops_val // 10), seed=np.random.randint(10000))
         self.ga = GA(depot, stops, n_couriers=couriers_val, pop_size=pop_val, mut_p=mut_val)
+        self._fit_world()  # re-fit the view to the new map's bounds
         self.mut_slider.val = mut_val
         self.state = "EVOLVE"
         self.paused = False
