@@ -17,13 +17,6 @@ def asset_path(name):
 def load_image(name):
     path = asset_path(name)
     if not path.exists():
-        raise FileNotFoundError(
-            f"Missing UI asset: {path}. Run tools/generate_ui_assets.py first."
-        )
+        raise FileNotFoundError(f"Missing UI asset: {path}")
     return pygame.image.load(str(path)).convert_alpha()
-
-
-@lru_cache(maxsize=None)
-def load_scaled(name, width, height):
-    return pygame.transform.smoothscale(load_image(name), (width, height))
 

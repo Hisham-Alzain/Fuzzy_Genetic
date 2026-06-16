@@ -54,3 +54,4 @@ fitness.png
 fuzzy_validation_results*.csv
 **/fitness.png
 **/best_routes.png
+**/shot_gen*.png

@@ -14,18 +14,11 @@ GRID = (235, 238, 241)      # faint grid lines
 # Text
 TXT = (31, 41, 51)          # primary slate
 MUT = (123, 135, 148)       # muted / secondary
-DIM = (176, 184, 194)       # faint labels
 
 # Accents (tuned to read on white)
 ACCENT = (59, 111, 224)     # calm blue
 SUCCESS = (32, 165, 105)    # calm green
 WARNING = (214, 158, 46)    # amber
-DANGER = (211, 71, 90)      # red
-
-# Back-compat aliases (older code paths)
-SURFACE = CARD
-SURFACE_ALT = FIELD
-MAP_BG = FIELD
 
 FAMILIES = [
     (230, 60, 80),
@@ -35,8 +28,6 @@ FAMILIES = [
     (140, 70, 210),
 ]
 SHADE_F = [0.4, 0.2, 0.0, -0.2, -0.4]
-# Darker spread for static route lines so they stay readable on a white field.
-LINE_SHADE = [0.12, 0.0, -0.16, -0.32, -0.48]
 
 
 def shade(color, factor):
@@ -48,11 +39,6 @@ def shade(color, factor):
 def courier_color(child_idx, courier_idx):
     """Color matching the pre-rendered truck sprites (lightened spread)."""
     return shade(FAMILIES[child_idx % len(FAMILIES)], SHADE_F[courier_idx % 5])
-
-
-def route_color(child_idx, courier_idx):
-    """Readable courier color for static route lines / bars on a white field."""
-    return shade(FAMILIES[child_idx % len(FAMILIES)], LINE_SHADE[courier_idx % 5])
 
 
 def courier_hue(courier_idx):

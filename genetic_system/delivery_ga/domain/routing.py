@@ -23,8 +23,3 @@ def measure(assignment, order, depot, stops, n_couriers):
     lengths = np.array([route_length(route, depot, stops) for route in routes])
     return float(lengths.max()), float(lengths.sum()), lengths
 
-
-def fitness(assignment, order, depot, stops, n_couriers, w_dist=0.01):
-    makespan, total, _ = measure(assignment, order, depot, stops, n_couriers)
-    return 1.0 / (makespan + w_dist * total)
-

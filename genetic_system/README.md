@@ -19,10 +19,9 @@ children race their couriers live, so finish order on screen matches fitness.
 
 ## UI Assets
 
-The GUI now uses pre-rendered PNG assets stored in `delivery_ga/assets/ui`.
-If you want to refresh or redesign the art set, regenerate them with:
-
-    python tools/generate_ui_assets.py
+The dashboard chrome (buttons, sliders, panels, cards) is drawn at runtime with
+pygame primitives. The world sprites — house, depot, and trucks — are
+pre-rendered PNGs in `delivery_ga/assets/ui`.
 
 Keys in the UI: SPACE pause · B toggle best-routes overlay · S screenshot · Q quit.
 
@@ -78,7 +77,6 @@ Keys in the UI: SPACE pause · B toggle best-routes overlay · S screenshot · Q
     delivery_ga/ui/race.py           race animation helpers
     delivery_ga/ui/widgets.py        buttons and sliders
     delivery_ga/ui/sprites.py        asset-backed sprite loaders
-    delivery_ga/assets/ui/           generated PNG UI assets
+    delivery_ga/assets/ui/           pre-rendered PNG world sprites
     delivery_ga/cli.py               app launcher
-    tools/generate_ui_assets.py      asset generator for the UI set
     main.py                          thin entry point
