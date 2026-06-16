@@ -25,7 +25,7 @@ def _enable_dpi_awareness():
     except Exception:
         pass  # non-Windows or no ctypes — nothing to do
 
-from delivery_ga.domain.maps import scattered_map
+from delivery_ga.domain.maps import clustered_map
 from delivery_ga.domain.routing import decode
 from delivery_ga.engine.ga import GA
 from delivery_ga.ui.race import Race
@@ -442,7 +442,7 @@ class App:
         pop_val = int(self.setup_sliders[2].val)
         self.gens = int(self.setup_sliders[3].val)
         mut_val = self.setup_sliders[4].val
-        depot, stops = scattered_map(stops_val, seed=np.random.randint(10000))
+        depot, stops = clustered_map(stops_val, max(1, stops_val // 10), seed=np.random.randint(10000))
         self.ga = GA(depot, stops, n_couriers=couriers_val, pop_size=pop_val, mut_p=mut_val)
         self._fit_world()  # re-fit the view to the new map's bounds
         self.mut_slider.val = mut_val
