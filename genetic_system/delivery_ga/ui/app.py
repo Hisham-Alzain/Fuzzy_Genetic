@@ -64,33 +64,29 @@ class App:
         self.out_dir = out_dir
         _enable_dpi_awareness()  # must run before the window is created
         pygame.init()
-        # Render at the display's native resolution whenever the responsive layout
-        # fits, so text and sprites stay razor-sharp (no per-frame downscale blur).
-        # Only when the screen is genuinely too small do we fall back to drawing on
-        # an off-screen canvas and scaling it down to fit.
+        # Run fullscreen at the display's native resolution: fills the screen and,
+        # because the app is DPI-aware, draws at true physical pixels (razor-sharp,
+        # no scaling). Press ESC or Q to quit.
         desktop = pygame.display.Info()
-        avail_w, avail_h = desktop.current_w - 40, desktop.current_h - 90
-        self.W = min(1440, max(1100, avail_w))   # design width  (layout needs >= 1100)
-        self.H = min(1024, max(820, avail_h))    # design height (layout needs >= 820)
-        if avail_w >= self.W and avail_h >= self.H:
-            self.win_w, self.win_h = self.W, self.H
-            self.window = pygame.display.set_mode((self.win_w, self.win_h))
-            self.screen = self.window  # draw straight to the window: crisp, no scaling
-        else:
-            scale = min(avail_w / self.W, avail_h / self.H)
-            self.win_w, self.win_h = int(self.W * scale), int(self.H * scale)
-            self.window = pygame.display.set_mode((self.win_w, self.win_h))
-            self.screen = pygame.Surface((self.W, self.H))  # scaled down for tiny screens
+        self.W, self.H = desktop.current_w, desktop.current_h
+        self.win_w, self.win_h = self.W, self.H
+        self.window = pygame.display.set_mode((self.W, self.H), pygame.FULLSCREEN)
+        self.screen = self.window  # draw straight to the screen: crisp, no scaling
         pygame.display.set_caption(title)
         self.clock = pygame.time.Clock()
 
         face = "segoeui,arial"
-        self.f_cap = pygame.font.SysFont(face, 15)              # ALL-CAPS labels
-        self.f_label = pygame.font.SysFont(face, 17)            # muted labels
-        self.f_body = pygame.font.SysFont(face, 18)             # body
-        self.f_card = pygame.font.SysFont(face, 21, bold=True)  # card titles
-        self.f_stat = pygame.font.SysFont(face, 30, bold=True)  # stat numbers
-        self.f_title = pygame.font.SysFont(face, 34, bold=True)  # page / modal title
+        fs = self.H / 1000.0  # scale type to the screen so it reads large on any display
+
+        def _font(px, bold=False):
+            return pygame.font.SysFont(face, max(12, round(px * fs)), bold=bold)
+
+        self.f_cap = _font(16)               # ALL-CAPS labels
+        self.f_label = _font(18)             # muted labels
+        self.f_body = _font(19)              # body
+        self.f_card = _font(23, bold=True)   # card titles
+        self.f_stat = _font(33, bold=True)   # stat numbers
+        self.f_title = _font(38, bold=True)  # page / modal title
         self._text_cache = {}  # (text, font_id, color) -> rendered surface
 
         self.state = "SETUP"
