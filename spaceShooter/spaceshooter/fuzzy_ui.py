@@ -78,7 +78,7 @@ def draw_top_bar(
     ]
 
     btn_rects = []
-    input_rects = []  # Track the clickable text boxes
+    input_rects = []
     col_w = game_w // 3
 
     for idx, (label, key, lo, hi, step) in enumerate(input_fields):
@@ -93,7 +93,6 @@ def draw_top_bar(
         label_surf = fb.render(f"{label}: ", True, WHITE)
         surf.blit(label_surf, (cx, cy))
 
-        # -- NEW: Draw the Text Input Box --
         box_x = cx + label_surf.get_width()
         box_w = 40
         box_rect = pygame.Rect(box_x, cy - 2, box_w, 18)
@@ -109,9 +108,8 @@ def draw_top_bar(
         surf.blit(fb.render(display_str, True, text_color), (box_rect.x + 4, cy))
 
         if manual_mode:
-            input_rects.append((box_rect, key))  # Save for click detection
+            input_rects.append((box_rect, key))
 
-            # Shift the + and - buttons to the right of the text box
             bx = box_rect.right + 10
             r_minus = pygame.Rect(bx, cy, 22, 17)
             pygame.draw.rect(surf, RED, r_minus, border_radius=2)
@@ -272,9 +270,9 @@ def _draw_single_plot(
             if mu > 0.01:
                 dot_y = int(dy + dh - mu * dh)
                 pygame.draw.circle(surf, RED, (vx, dot_y), 4)
-                # μ value label
+
                 mu_surf = fs.render(f"{mu:.2f}", True, WHITE)
-                # Alternate label side to avoid overlap
+
                 lx = vx + 6 if ci % 2 == 0 else vx - mu_surf.get_width() - 6
                 lx = max(dx, min(lx, dx + dw - mu_surf.get_width()))
                 surf.blit(mu_surf, (lx, dot_y - 6))
@@ -299,7 +297,7 @@ def _draw_single_plot(
         surf.blit(lbl, (lx + 15, ly))
         lx += 18 + lbl.get_width()
         if lx > x + w - 30:
-            break  # Ran out of horizontal space
+            break
 
     # Axis labels
     fa = pygame.font.Font(font_name, 9)
@@ -320,9 +318,6 @@ def _draw_single_plot(
     surf.blit(fa.render("1.0", True, MED_GRAY), (dx - 2, dy - 10))
 
 
-# ═══════════════════════════════════════════════════════════════
-#  RULES PANEL  (Alternative right-side view)
-# ═══════════════════════════════════════════════════════════════
 # ═══════════════════════════════════════════════════════════════
 #  RULES PANEL  (Alternative right-side view)
 # ═══════════════════════════════════════════════════════════════
@@ -347,7 +342,6 @@ def draw_rules_panel(
     # Panel Title
     surf.blit(title_font.render("FUZZY RULE BASE", True, YELLOW), (panel_x + 20, 15))
 
-    # Updated Slices: Exactly 6 rules per category
     columns = [
         # --- LEFT COLUMN ---
         [
