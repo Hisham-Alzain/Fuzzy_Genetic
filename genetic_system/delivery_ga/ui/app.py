@@ -360,12 +360,14 @@ class App:
             if not order:
                 self._text("Race underway — finish order populates live.", x, top + 4, self.f_label, MUT)
                 return
-            for rank, child_idx in enumerate(order[:5]):
-                name, color, makespan = self.race.names[child_idx]
-                row_y = top + rank * 32
+            avail = card.bottom - PAD - top
+            stride = min(32, avail / max(1, len(self.race.finish)))
+            for rank, courier_idx in enumerate(order):
+                name, color, dist = self.race.names[courier_idx]
+                row_y = int(top + rank * stride)
                 self._chip(pygame.Rect(x, row_y, 26, 22), str(rank + 1), color)
                 self._text(name.title(), x + 38, row_y + 2, self.f_body, TXT)
-                self._text_right(f"{makespan:,.0f}", card.right - PAD, row_y + 2, self.f_body, MUT)
+                self._text_right(f"{dist:,.0f}", card.right - PAD, row_y + 2, self.f_body, MUT)
             return
 
         best = self.ga.best
@@ -458,7 +460,7 @@ class App:
             self._routes_of(self.ga.best, 170, width=4)
         self._draw_sidebar()
         if self.ga.gen % self.race_every == 0 or self.ga.gen >= self.gens:
-            self.race = Race(self.ga.top_distinct(self.top_n), self.ga.depot, self.ga.stops, self.ga.k)
+            self.race = Race(self.ga.best, self.ga.depot, self.ga.stops, self.ga.k)
             self.state = "RACE"
 
     def _race_frame(self, dt):

@@ -1,9 +1,15 @@
-"""Race-mode animation helpers."""
+"""Race-mode animation helpers.
+
+The race animates the single best solution: one truck per courier driving its
+route. The number of trucks on screen equals the courier count, and each truck
+is colored to match its "Courier Load" bar (courier_hue) so the map and the
+sidebar read as one picture.
+"""
 
 import numpy as np
 
 from delivery_ga.domain.routing import decode
-from delivery_ga.ui.theme import FAMILIES, courier_color, truck_sprite_name
+from delivery_ga.ui.theme import courier_hue, truck_sprite_name
 
 
 class Truck:
@@ -34,40 +40,32 @@ class Truck:
 
 
 class Race:
-    def __init__(self, individuals, depot, stops, n_couriers, duration=8.0):
+    def __init__(self, individual, depot, stops, n_couriers, duration=8.0):
         self.trucks = []
         self.finish = []
         self.names = []
-        worst = 1.0
-        per_child = []
-        for child_idx, individual in enumerate(individuals):
-            routes = decode(individual.assign, individual.order, n_couriers)
-            trucks = []
-            for courier_idx, route in enumerate(routes):
-                if len(route):
-                    pts = np.vstack([depot, stops[route], depot])
-                else:
-                    pts = np.vstack([depot, depot])
-                trucks.append(
-                    Truck(
-                        pts,
-                        courier_color(child_idx, courier_idx),
-                        truck_sprite_name(child_idx, courier_idx),
-                    )
-                )
-            per_child.append(trucks)
-            worst = max(worst, individual.makespan)
-        self.speed = worst / duration
-        for child_idx, trucks in enumerate(per_child):
-            self.trucks.extend(trucks)
-            self.finish.append(max(truck.total for truck in trucks) / self.speed)
-            self.names.append(
-                (
-                    f"child {child_idx + 1}",
-                    FAMILIES[child_idx % len(FAMILIES)],
-                    individuals[child_idx].makespan,
+        routes = decode(individual.assign, individual.order, n_couriers)
+        for courier_idx, route in enumerate(routes):
+            if len(route):
+                pts = np.vstack([depot, stops[route], depot])
+            else:
+                pts = np.vstack([depot, depot])
+            self.trucks.append(
+                Truck(
+                    pts,
+                    courier_hue(courier_idx),
+                    truck_sprite_name(courier_idx, 2),  # base-shade family color
                 )
             )
+
+        worst = max((truck.total for truck in self.trucks), default=1.0) or 1.0
+        self.speed = worst / duration
+        for courier_idx, truck in enumerate(self.trucks):
+            self.finish.append(truck.total / self.speed)
+            self.names.append(
+                (f"courier {courier_idx + 1}", courier_hue(courier_idx), truck.total)
+            )
+
         self.t = 0.0
         self.done_order = []
         self.visited = np.zeros(len(stops), dtype=bool)
@@ -83,7 +81,7 @@ class Race:
             self.visited |= near
             self.flash[newly] = 1.0
         self.flash *= 0.92
-        for child_idx, finish_time in enumerate(self.finish):
-            if self.t >= finish_time and child_idx not in self.done_order:
-                self.done_order.append(child_idx)
+        for courier_idx, finish_time in enumerate(self.finish):
+            if self.t >= finish_time and courier_idx not in self.done_order:
+                self.done_order.append(courier_idx)
         return len(self.done_order) == len(self.finish)
