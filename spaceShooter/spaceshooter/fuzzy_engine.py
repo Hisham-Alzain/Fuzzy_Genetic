@@ -120,7 +120,7 @@ class FuzzyDifficultyEngine:
         # Player struggling  -> ease off  (slow mobs, sparse spawns, small targets)
         # Player stable      -> hold      (medium everything)
         # Player dominating  -> ramp up   (fast mobs, dense spawns, big targets)
-        # Player special     -> New challenges (chaos, high damage, low dodge)
+        # Player special     -> New challenges (chaos, high damage, harder dodge)
 
         self.rules_info = []  # Stores (rule_obj, description) pairs
 

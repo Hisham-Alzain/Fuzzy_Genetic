@@ -147,7 +147,6 @@ def run_validation_tests():
         writer.writerows(results_data)
 
     print(f"\nSuccess! Validation dataset exported to '{csv_filename}'.")
-    print("You can copy this directly into your final report to satisfy Requirement 8.")
 
 
 def _get_expected_difficulty(test_id):
