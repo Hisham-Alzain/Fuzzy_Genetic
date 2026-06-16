@@ -45,8 +45,23 @@ class App:
         self.top_n = top_n
         self.out_dir = out_dir
         pygame.init()
-        self.W, self.H = 1440, 1024
-        self.screen = pygame.display.set_mode((self.W, self.H))
+        # Render at the display's native resolution whenever the responsive layout
+        # fits, so text and sprites stay razor-sharp (no per-frame downscale blur).
+        # Only when the screen is genuinely too small do we fall back to drawing on
+        # an off-screen canvas and scaling it down to fit.
+        desktop = pygame.display.Info()
+        avail_w, avail_h = desktop.current_w - 40, desktop.current_h - 90
+        self.W = min(1440, max(1100, avail_w))   # design width  (layout needs >= 1100)
+        self.H = min(1024, max(820, avail_h))    # design height (layout needs >= 820)
+        if avail_w >= self.W and avail_h >= self.H:
+            self.win_w, self.win_h = self.W, self.H
+            self.window = pygame.display.set_mode((self.win_w, self.win_h))
+            self.screen = self.window  # draw straight to the window: crisp, no scaling
+        else:
+            scale = min(avail_w / self.W, avail_h / self.H)
+            self.win_w, self.win_h = int(self.W * scale), int(self.H * scale)
+            self.window = pygame.display.set_mode((self.win_w, self.win_h))
+            self.screen = pygame.Surface((self.W, self.H))  # scaled down for tiny screens
         pygame.display.set_caption(title)
         self.clock = pygame.time.Clock()
 
@@ -57,6 +72,7 @@ class App:
         self.f_card = pygame.font.SysFont(face, 18, bold=True)  # card titles
         self.f_stat = pygame.font.SysFont(face, 27, bold=True)  # stat numbers
         self.f_title = pygame.font.SysFont(face, 30, bold=True)  # page / modal title
+        self._text_cache = {}  # (text, font_id, color) -> rendered surface
 
         self.state = "SETUP"
         self.race = None
@@ -126,7 +142,7 @@ class App:
             slider.set_rect(slider_x, start_y + idx * 72, slider_w, 8)
         self.btn_start.set_rect(modal.x + mpad, modal.bottom - 84, slider_w, 52)
 
-        # Live-control widget rects (also refreshed during draw).
+        # Live-control widget rects.
         controls = self.layout["controls_card"]
         cw = controls.w - PAD * 2
         self.mut_slider.set_rect(controls.x + PAD, controls.y + 86, cw, 8)
@@ -145,14 +161,24 @@ class App:
         key = (sprite_name, angle)
         if key not in self.car_cache:
             base = load_truck_sprite(sprite_name)
-            self.car_cache[key] = pygame.transform.rotozoom(base, angle, 0.7)
+            self.car_cache[key] = pygame.transform.rotozoom(base, angle, 0.28)
         return self.car_cache[key]
 
+    def _render_text(self, text, font, col):
+        key = (text, id(font), col)
+        surf = self._text_cache.get(key)
+        if surf is None:
+            if len(self._text_cache) > 600:  # cap growth from ever-changing numbers
+                self._text_cache.clear()
+            surf = font.render(text, True, col)
+            self._text_cache[key] = surf
+        return surf
+
     def _text(self, text, x, y, font=None, col=TXT):
-        self.screen.blit((font or self.f_body).render(text, True, col), (int(x), int(y)))
+        self.screen.blit(self._render_text(text, font or self.f_body, col), (int(x), int(y)))
 
     def _text_right(self, text, right, y, font=None, col=TXT):
-        surf = (font or self.f_body).render(text, True, col)
+        surf = self._render_text(text, font or self.f_body, col)
         self.screen.blit(surf, surf.get_rect(topright=(int(right), int(y))))
 
     def _card(self, rect, radius=CARD_RADIUS):
@@ -238,7 +264,7 @@ class App:
         depot_point = self._sc(self.ga.depot)
         self.screen.blit(self.depot_sprite, self.depot_sprite.get_rect(center=depot_point))
 
-    def _routes_of(self, individual, alpha, width=4, family=0):
+    def _routes_of(self, individual, alpha, width=4):
         self.trail_overlay.fill((0, 0, 0, 0))
         routes = decode(individual.assign, individual.order, self.ga.k)
         for courier_idx, route in enumerate(routes):
@@ -343,12 +369,8 @@ class App:
         card = self.layout["controls_card"]
         self._card(card)
         self._card_title(card, "Controls", accent=ACCENT)
-        cw = card.w - PAD * 2
-        self.mut_slider.set_rect(card.x + PAD, card.y + 86, cw, 8)
-        self.speed_slider.set_rect(card.x + PAD, card.y + 142, cw, 8)
         self.mut_slider.draw(self.screen, self.f_body, self.f_cap, f"{self.mut_slider.val:.3f}")
         self.speed_slider.draw(self.screen, self.f_body, self.f_cap, str(int(self.speed_slider.val)))
-        self.btn_stop.set_rect(card.x + PAD, card.bottom - PAD - 44, cw, 44)
         self.btn_stop.draw(self.screen, self.f_body)
 
     def _draw_sidebar(self):
@@ -414,7 +436,7 @@ class App:
         self._draw_background()
         self._draw_world()
         if self.show_best:
-            self._routes_of(self.ga.best, 170, width=4, family=0)
+            self._routes_of(self.ga.best, 170, width=4)
         self._draw_sidebar()
         if self.ga.gen % self.race_every == 0 or self.ga.gen >= self.gens:
             self.race = Race(self.ga.top_distinct(self.top_n), self.ga.depot, self.ga.stops, self.ga.k)
@@ -446,15 +468,20 @@ class App:
     def _end_frame(self):
         self._draw_background()
         self._draw_world()
-        self._routes_of(self.ga.best, 230, width=5, family=0)
+        self._routes_of(self.ga.best, 230, width=5)
         self._draw_sidebar()
 
     def run(self, max_frames=None, shots=None):
         shots = shots or {}
         running = True
+        sx = self.W / self.win_w
+        sy = self.H / self.win_h
         while running:
             dt = self.clock.tick(60) / 1000.0
             for event in pygame.event.get():
+                # Map window-space mouse coords back to design-space.
+                if hasattr(event, "pos"):
+                    event.pos = (int(event.pos[0] * sx), int(event.pos[1] * sy))
                 if event.type == pygame.QUIT:
                     running = False
                 elif event.type == pygame.KEYDOWN:
@@ -489,6 +516,8 @@ class App:
             elif self.state == "END":
                 self._end_frame()
 
+            if self.screen is not self.window:
+                pygame.transform.smoothscale(self.screen, (self.win_w, self.win_h), self.window)
             pygame.display.flip()
             self.frame += 1
             if self.frame in shots:
